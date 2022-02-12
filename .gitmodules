@@ -1,0 +1,3 @@
+[submodule "external/cryptorand"]
+	path = external/cryptorand
+	url = https://github.com/mackron/cryptorand.git
