@@ -38,7 +38,7 @@ Use the following APIs to format the UUID as a string:
     uuid_format(char* pDst, size_t dstCap, const unsigned char* pUUID);
 
 The size of the UUID buffer must be at least `UUID_SIZE` (16 bytes). For formatted strings the
-destination buffer should be at least `UUID_FORMATTED_SIZE`.
+destination buffer should be at least `UUID_SIZE_FORMATTED`.
 
 Example:
 
@@ -46,7 +46,7 @@ Example:
     unsigned char uuid[UUID_SIZE];
     uuid4(uuid, NULL);
 
-    char str[UUID_FORMATTED_SIZE];
+    char str[UUID_SIZE_FORMATTED];
     uuid_format(str, sizeof(str), uuid);
     ```
 
@@ -129,7 +129,7 @@ set before including any standard headers.
 #include <stddef.h>
 
 #define UUID_SIZE           16
-#define UUID_FORMATTED_SIZE 37
+#define UUID_SIZE_FORMATTED 37
 
 typedef enum
 {
@@ -157,7 +157,7 @@ uuid_result uuid5(unsigned char* pUUID, const unsigned char* pNamespaceUUID, con
 uuid_result uuid_ordered(unsigned char* pUUID, uuid_rand* pRNG);
 
 /* Formatting. */
-uuid_result uuid_format(char* pDst, size_t dstCap, const unsigned char* pUUID);
+uuid_result uuid_format(char* dst, size_t dstCap, const unsigned char* pUUID);
 
 #ifdef __cplusplus
 }
@@ -656,9 +656,9 @@ uuid_result uuid_ordered(unsigned char* pUUID, uuid_rand* pRNG)
 
 static void uuid_format_byte(char* dst, unsigned char byte)
 {
-    const char* pHexChars = "0123456789abcdef";
-    dst[0] = pHexChars[(byte & 0xF0) >> 4];
-    dst[1] = pHexChars[(byte & 0x0F)     ];
+    const char* hex = "0123456789abcdef";
+    dst[0] = hex[(byte & 0xF0) >> 4];
+    dst[1] = hex[(byte & 0x0F)     ];
 }
 
 uuid_result uuid_format(char* dst, size_t dstCap, const unsigned char* pUUID)
@@ -669,7 +669,7 @@ uuid_result uuid_format(char* dst, size_t dstCap, const unsigned char* pUUID)
         return UUID_INVALID_ARGS;
     }
 
-    if (dstCap < UUID_FORMATTED_SIZE) {
+    if (dstCap < UUID_SIZE_FORMATTED) {
         if (dstCap > 0) {
             dst[0] = '\0';
         }
