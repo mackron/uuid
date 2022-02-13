@@ -111,6 +111,32 @@ int main(int argc, char** argv)
     }
     printf("\n");
 
+
+    printf("uuid_ordered()\n");
+    {
+        for (i = 0; i < count; i += 1) {
+            uuid_ordered(uuid);
+            uuid_format(uuidFormatted, sizeof(uuidFormatted), uuid);
+            printf("%s\n", uuidFormatted);
+        }
+    }
+    printf("\n");
+
+    printf("uuid_ordered_ex()\n");
+    {
+        uuid_cryptorand rng;
+        uuid_cryptorand_init(&rng);
+
+        for (i = 0; i < count; i += 1) {
+            uuid_ordered_ex(uuid, &rng);
+            uuid_format(uuidFormatted, sizeof(uuidFormatted), uuid);
+            printf("%s\n", uuidFormatted);
+        }
+
+        uuid_cryptorand_uninit(&rng);
+    }
+    printf("\n");
+
     (void)argc;
     (void)argv;
 

@@ -18,6 +18,11 @@ Use the following APIs to generate a UUID:
     uuid1_ex(unsigned char* pUUID, uuid_rand* pRNG);
     uuid4(unsigned char* pUUID);
     uuid4_ex(unsigned char* pUUID, uuid_rand* pRNG);
+    uuid_ordered(unsigned char* pUUID);
+    uuid_ordered_ex(unsigned char* pUUID, uuid_rand* pRNG);
+
+If you want to use a time-based ordered UUID you can use `uuid_ordered()`. Note that this is not
+officially allowed by RFC 4122. This does not encode a version as it would break ordering.
 
 Use the following APIs to format the UUID as a string:
 
@@ -138,6 +143,8 @@ uuid_result uuid1_ex(unsigned char* pUUID, uuid_rand* pRNG);
 uuid_result uuid1(unsigned char* pUUID);
 uuid_result uuid4_ex(unsigned char* pUUID, uuid_rand* pRNG);
 uuid_result uuid4(unsigned char* pUUID);
+uuid_result uuid_ordered_ex(unsigned char* pUUID, uuid_rand* pRNG);
+uuid_result uuid_ordered(unsigned char* pUUID);
 
 /* Formatting. */
 uuid_result uuid_format(char* pDst, size_t dstCap, const unsigned char* pUUID);
@@ -409,8 +416,59 @@ uuid_result uuid4_internal(unsigned char* pUUID, uuid_rand* pRNG)
         return result;
     }
 
-    /* Byte 6 needs to be updated so the version number is set appropriately. We're using version 4 for now. */
+    /* Byte 6 needs to be updated so the version number is set appropriately. */
     pUUID[6] = 0x40 | (pUUID[6] & 0x0F);
+
+    /* Byte 8 needs to be updated to reflect the variant. In our case it'll always be Variant 1. */
+    pUUID[8] = 0x80 | (pUUID[8] & 0x3F);
+
+    return UUID_SUCCESS;
+}
+
+uuid_result uuid_ordered_internal(unsigned char* pUUID, uuid_rand* pRNG)
+{
+    uuid_result result;
+    uuid_uint64 time;
+    uuid_uint32 timeLow;
+    uuid_uint16 timeMid;
+    uuid_uint16 timeHi;
+
+    UUID_ASSERT(pUUID != NULL);
+    UUID_ASSERT(pRNG  != NULL);
+
+    result = uuid_get_time(&time);
+    if (result != UUID_SUCCESS) {
+        return result;
+    }
+
+    timeLow = (uuid_uint32)((time >>  0) & 0xFFFFFFFF);
+    timeMid = (uuid_uint16)((time >> 32) & 0x0000FFFF);
+    timeHi  = (uuid_uint16)((time >> 48) & 0x00000FFF);
+
+    /* Time High and Version */
+    pUUID[0] = (unsigned char)((timeHi  >>  8) & 0xFF);
+    pUUID[1] = (unsigned char)((timeHi  >>  0) & 0xFF);
+
+    /* Time Mid */
+    pUUID[2] = (unsigned char)((timeMid >>  8) & 0xFF);
+    pUUID[3] = (unsigned char)((timeMid >>  0) & 0xFF);
+
+    /* Time Low */
+    pUUID[4] = (unsigned char)((timeLow >> 24) & 0xFF);
+    pUUID[5] = (unsigned char)((timeLow >> 16) & 0xFF);
+    pUUID[6] = (unsigned char)((timeLow >>  8) & 0xFF);
+    pUUID[7] = (unsigned char)((timeLow >>  0) & 0xFF);
+
+
+    /* For the clock sequence and node ID we're always using a random number. */
+    result = ((uuid_rand_callbacks*)pRNG)->onGenerate(pRNG, pUUID + 8, UUID_SIZE - 8);
+    if (result != UUID_SUCCESS) {
+        UUID_ZERO_MEMORY(pUUID, UUID_SIZE);
+        return result;
+    }
+
+    /* Setting the version number breaks the ordering property of these UUIDs so I'm leaving this unset. */
+    /*pUUID[6] = 0x40 | (pUUID[6] & 0x0F);*/
 
     /* Byte 8 needs to be updated to reflect the variant. In our case it'll always be Variant 1. */
     pUUID[8] = 0x80 | (pUUID[8] & 0x3F);
@@ -421,11 +479,12 @@ uuid_result uuid4_internal(unsigned char* pUUID, uuid_rand* pRNG)
 
 typedef enum
 {
-    UUID_VERSION_1 = 1,     /* Timed. */
-    UUID_VERSION_2 = 2,     /* ??? */
-    UUID_VERSION_3 = 3,     /* Named with MD5 hashing. */
-    UUID_VERSION_4 = 4,     /* Random. */
-    UUID_VERSION_5 = 5      /* Named with SHA1 hashing. */
+    UUID_VERSION_1       = 1,   /* Timed. */
+    UUID_VERSION_2       = 2,   /* ??? */
+    UUID_VERSION_3       = 3,   /* Named with MD5 hashing. */
+    UUID_VERSION_4       = 4,   /* Random. */
+    UUID_VERSION_5       = 5,   /* Named with SHA1 hashing. */
+    UUID_VERSION_ORDERED = 100  /* Unofficial. Similar to version 1, but the time part is swapped so that it's sorted by time. Useful for database keys. */
 } uuid_version;
 
 static uuid_result uuidn(unsigned char* pUUID, uuid_rand* pRNG, uuid_version version)
@@ -440,8 +499,8 @@ static uuid_result uuidn(unsigned char* pUUID, uuid_rand* pRNG, uuid_version ver
 
     UUID_ZERO_MEMORY(pUUID, UUID_SIZE);
 
-    /* We need a random number generator if we're using version 1 or 4. */
-    if (version == UUID_VERSION_1 || version == UUID_VERSION_4) {
+    /* Some versions need s random number generator. */
+    if (version == UUID_VERSION_1 || version == UUID_VERSION_4 || version == UUID_VERSION_ORDERED) {
         if (pRNG == NULL) {
         #if !defined(UUID_NO_CRYPTORAND)
             uuid_result result = uuid_cryptorand_init(&cryptorandRNG);
@@ -458,11 +517,12 @@ static uuid_result uuidn(unsigned char* pUUID, uuid_rand* pRNG, uuid_version ver
 
     switch (version)
     {
-        case UUID_VERSION_1: return uuid1_internal(pUUID, pRNG);
-        case UUID_VERSION_2: return UUID_NOT_IMPLEMENTED;
-        case UUID_VERSION_3: return UUID_NOT_IMPLEMENTED;
-        case UUID_VERSION_4: return uuid4_internal(pUUID, pRNG);
-        case UUID_VERSION_5: return UUID_NOT_IMPLEMENTED;
+        case UUID_VERSION_1:       return uuid1_internal(pUUID, pRNG);
+        case UUID_VERSION_2:       return UUID_NOT_IMPLEMENTED;
+        case UUID_VERSION_3:       return UUID_NOT_IMPLEMENTED;
+        case UUID_VERSION_4:       return uuid4_internal(pUUID, pRNG);
+        case UUID_VERSION_5:       return UUID_NOT_IMPLEMENTED;
+        case UUID_VERSION_ORDERED: return uuid_ordered_internal(pUUID, pRNG);
         default: return UUID_INVALID_ARGS;  /* Unknown or unsupported version. */
     };
 }
@@ -487,6 +547,18 @@ uuid_result uuid4(unsigned char* pUUID)
 {
     return uuid4_ex(pUUID, NULL);
 }
+
+uuid_result uuid_ordered_ex(unsigned char* pUUID, uuid_rand* pRNG)
+{
+    return uuidn(pUUID, pRNG, UUID_VERSION_ORDERED);
+}
+
+uuid_result uuid_ordered(unsigned char* pUUID)
+{
+    return uuid_ordered_ex(pUUID, NULL);
+}
+
+
 
 
 static void uuid_format_byte(char* pBufferOut, unsigned char byte)
