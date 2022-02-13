@@ -9,6 +9,20 @@ Currently only versions 1 and 4 are supported, but support for other versions mi
 For more information on the differences between the different UUID versions, see RFC 4122. Use
 version 1 if you want a time-based UUID. Use version 4 if you want a purely random UUID.
 
+This support all UUID versions defined in RFC 4122 except version 2. For version 3 and 5 you will
+need to provide your own MD5 and SHA-1 hasher by defining the some macros before the implementation
+of this library. Below is an example:
+
+    #define UUID_MD5_CTX_TYPE               struct md5_context
+    #define UUID_MD5_INIT(ctx)              md5_init(ctx)
+    #define UUID_MD5_FINAL(ctx, digest)     md5_finalize(ctx, (struct md5_digest*)(digest))
+    #define UUID_MD5_UPDATE(ctx, src, sz)   md5_update(ctx, src, (uint32_t)(sz))
+
+    #define UUID_SHA1_CTX_TYPE              SHA1_CTX
+    #define UUID_SHA1_INIT(ctx)             SHA1Init(ctx)
+    #define UUID_SHA1_FINAL(ctx, digest)    SHA1Final(digest, ctx)
+    #define UUID_SHA1_UPDATE(ctx, src, sz)  SHA1Update(ctx, src, (uint32_t)(sz));
+
 There is no need to link to anything with this library. You can use UUID_IMPLEMENTATION to define
 the implementation section, or you can use uuid.c if you prefer a traditional header/source pair.
 
@@ -141,8 +155,10 @@ typedef struct
 /* Generation. */
 uuid_result uuid1_ex(unsigned char* pUUID, uuid_rand* pRNG);
 uuid_result uuid1(unsigned char* pUUID);
+uuid_result uuid3(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName);
 uuid_result uuid4_ex(unsigned char* pUUID, uuid_rand* pRNG);
 uuid_result uuid4(unsigned char* pUUID);
+uuid_result uuid5(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName);
 uuid_result uuid_ordered_ex(unsigned char* pUUID, uuid_rand* pRNG);
 uuid_result uuid_ordered(unsigned char* pUUID);
 
@@ -163,8 +179,9 @@ typedef unsigned int       uuid_uint32;
 typedef unsigned long long uuid_uint64;
 
 #include <string.h>
-#define UUID_ZERO_MEMORY(p, sz) memset((p), 0, (sz))
-#define UUID_ZERO_OBJECT(o)     UUID_ZERO_MEMORY((o), sizeof(*o))
+#define UUID_COPY_MEMORY(dst, src, sz)  memcpy((dst), (src), (sz))
+#define UUID_ZERO_MEMORY(p, sz)         memset((p), 0, (sz))
+#define UUID_ZERO_OBJECT(o)             UUID_ZERO_MEMORY((o), sizeof(*o))
 
 #ifndef UUID_ASSERT
     #include <assert.h>
@@ -355,7 +372,7 @@ static uuid_result uuid_get_time(uuid_uint64* pTime)
     return UUID_SUCCESS;
 }
 
-uuid_result uuid1_internal(unsigned char* pUUID, uuid_rand* pRNG)
+static uuid_result uuid1_internal(unsigned char* pUUID, uuid_rand* pRNG)
 {
     uuid_result result;
     uuid_uint64 time;
@@ -402,7 +419,37 @@ uuid_result uuid1_internal(unsigned char* pUUID, uuid_rand* pRNG)
     return UUID_SUCCESS;
 }
 
-uuid_result uuid4_internal(unsigned char* pUUID, uuid_rand* pRNG)
+static uuid_result uuid3_internal(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName)
+{
+#if defined(UUID_MD5_CTX_TYPE)
+    unsigned char hash[20];
+    UUID_MD5_CTX_TYPE ctx;
+
+    UUID_MD5_INIT(&ctx);
+    {
+        UUID_MD5_UPDATE(&ctx, pNamespaceUUID, UUID_SIZE);
+        UUID_MD5_UPDATE(&ctx, (const unsigned char*)pName, strlen(pName));
+    }
+    UUID_MD5_FINAL(&ctx, hash);
+
+    UUID_COPY_MEMORY(pUUID, hash, UUID_SIZE);
+
+    /* Byte 6 needs to be updated so the version number is set appropriately. */
+    pUUID[6] = 0x30 | (pUUID[6] & 0x0F);
+
+    /* Byte 8 needs to be updated to reflect the variant. In our case it'll always be Variant 1. */
+    pUUID[8] = 0x80 | (pUUID[8] & 0x3F);
+
+    return UUID_SUCCESS;
+#else
+    (void)pUUID;
+    (void)pNamespaceUUID;
+    (void)pName;
+    return UUID_NOT_IMPLEMENTED;
+#endif
+}
+
+static uuid_result uuid4_internal(unsigned char* pUUID, uuid_rand* pRNG)
 {
     uuid_result result;
 
@@ -423,6 +470,36 @@ uuid_result uuid4_internal(unsigned char* pUUID, uuid_rand* pRNG)
     pUUID[8] = 0x80 | (pUUID[8] & 0x3F);
 
     return UUID_SUCCESS;
+}
+
+static uuid_result uuid5_internal(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName)
+{
+#if defined(UUID_SHA1_CTX_TYPE)
+    unsigned char hash[20];
+    UUID_SHA1_CTX_TYPE ctx;
+
+    UUID_SHA1_INIT(&ctx);
+    {
+        UUID_SHA1_UPDATE(&ctx, pNamespaceUUID, UUID_SIZE);
+        UUID_SHA1_UPDATE(&ctx, (const unsigned char*)pName, strlen(pName));
+    }
+    UUID_SHA1_FINAL(&ctx, hash);
+
+    UUID_COPY_MEMORY(pUUID, hash, UUID_SIZE);
+
+    /* Byte 6 needs to be updated so the version number is set appropriately. */
+    pUUID[6] = 0x50 | (pUUID[6] & 0x0F);
+
+    /* Byte 8 needs to be updated to reflect the variant. In our case it'll always be Variant 1. */
+    pUUID[8] = 0x80 | (pUUID[8] & 0x3F);
+
+    return UUID_SUCCESS;
+#else
+    (void)pUUID;
+    (void)pNamespaceUUID;
+    (void)pName;
+    return UUID_NOT_IMPLEMENTED;
+#endif
 }
 
 uuid_result uuid_ordered_internal(unsigned char* pUUID, uuid_rand* pRNG)
@@ -487,7 +564,7 @@ typedef enum
     UUID_VERSION_ORDERED = 100  /* Unofficial. Similar to version 1, but the time part is swapped so that it's sorted by time. Useful for database keys. */
 } uuid_version;
 
-static uuid_result uuidn(unsigned char* pUUID, uuid_rand* pRNG, uuid_version version)
+static uuid_result uuidn(unsigned char* pUUID, uuid_rand* pRNG, const unsigned char* pNamespaceUUID, const char* pName, uuid_version version)
 {
 #if !defined(UUID_NO_CRYPTORAND)
     uuid_cryptorand cryptorandRNG;
@@ -519,9 +596,9 @@ static uuid_result uuidn(unsigned char* pUUID, uuid_rand* pRNG, uuid_version ver
     {
         case UUID_VERSION_1:       return uuid1_internal(pUUID, pRNG);
         case UUID_VERSION_2:       return UUID_NOT_IMPLEMENTED;
-        case UUID_VERSION_3:       return UUID_NOT_IMPLEMENTED;
+        case UUID_VERSION_3:       return uuid3_internal(pUUID, pNamespaceUUID, pName);
         case UUID_VERSION_4:       return uuid4_internal(pUUID, pRNG);
-        case UUID_VERSION_5:       return UUID_NOT_IMPLEMENTED;
+        case UUID_VERSION_5:       return uuid5_internal(pUUID, pNamespaceUUID, pName);
         case UUID_VERSION_ORDERED: return uuid_ordered_internal(pUUID, pRNG);
         default: return UUID_INVALID_ARGS;  /* Unknown or unsupported version. */
     };
@@ -530,7 +607,7 @@ static uuid_result uuidn(unsigned char* pUUID, uuid_rand* pRNG, uuid_version ver
 
 uuid_result uuid1_ex(unsigned char* pUUID, uuid_rand* pRNG)
 {
-    return uuidn(pUUID, pRNG, UUID_VERSION_1);
+    return uuidn(pUUID, pRNG, NULL, NULL, UUID_VERSION_1);
 }
 
 uuid_result uuid1(unsigned char* pUUID)
@@ -538,9 +615,14 @@ uuid_result uuid1(unsigned char* pUUID)
     return uuid1_ex(pUUID, NULL);
 }
 
+uuid_result uuid3(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName)
+{
+    return uuidn(pUUID, NULL, pNamespaceUUID, pName, UUID_VERSION_3);
+}
+
 uuid_result uuid4_ex(unsigned char* pUUID, uuid_rand* pRNG)
 {
-    return uuidn(pUUID, pRNG, UUID_VERSION_4);
+    return uuidn(pUUID, pRNG, NULL, NULL, UUID_VERSION_4);
 }
 
 uuid_result uuid4(unsigned char* pUUID)
@@ -548,9 +630,14 @@ uuid_result uuid4(unsigned char* pUUID)
     return uuid4_ex(pUUID, NULL);
 }
 
+uuid_result uuid5(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName)
+{
+    return uuidn(pUUID, NULL, pNamespaceUUID, pName, UUID_VERSION_5);
+}
+
 uuid_result uuid_ordered_ex(unsigned char* pUUID, uuid_rand* pRNG)
 {
-    return uuidn(pUUID, pRNG, UUID_VERSION_ORDERED);
+    return uuidn(pUUID, pRNG, NULL, NULL, UUID_VERSION_ORDERED);
 }
 
 uuid_result uuid_ordered(unsigned char* pUUID)
