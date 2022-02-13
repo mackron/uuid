@@ -5,7 +5,7 @@
     <a href="https://twitter.com/mackron"><img src="https://img.shields.io/twitter/follow/mackron?style=flat&label=twitter&color=1da1f2&logo=twitter" alt="twitter"></a>
 </p>
 
-This support all UUID versions defined in RFC 4122 except version 2. For version 3 and 5 you will
+This supports all UUID versions defined in RFC 4122 except version 2. For version 3 and 5 you will
 need to provide your own MD5 and SHA-1 hasher by defining the some macros before the implementation
 of this library. Below is an example:
 
