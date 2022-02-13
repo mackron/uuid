@@ -76,77 +76,10 @@ int main(int argc, char** argv)
     printf("uuid1()\n");
     {
         for (i = 0; i < count; i += 1) {
-            uuid1(uuid);
+            uuid1(uuid, NULL);
             uuid_format(uuidFormatted, sizeof(uuidFormatted), uuid);
             printf("%s\n", uuidFormatted);
         }
-    }
-    printf("\n");
-
-    printf("uuid1_ex()\n");
-    {
-        uuid_cryptorand rng;
-        uuid_cryptorand_init(&rng);
-
-        for (i = 0; i < count; i += 1) {
-            uuid1_ex(uuid, &rng);
-            uuid_format(uuidFormatted, sizeof(uuidFormatted), uuid);
-            printf("%s\n", uuidFormatted);
-        }
-
-        uuid_cryptorand_uninit(&rng);
-    }
-    printf("\n");
-
-
-    printf("uuid4()\n");
-    {
-        for (i = 0; i < count; i += 1) {
-            uuid4(uuid);
-            uuid_format(uuidFormatted, sizeof(uuidFormatted), uuid);
-            printf("%s\n", uuidFormatted);
-        }
-    }
-    printf("\n");
-
-    printf("uuid4_ex()\n");
-    {
-        uuid_cryptorand rng;
-        uuid_cryptorand_init(&rng);
-
-        for (i = 0; i < count; i += 1) {
-            uuid4_ex(uuid, &rng);
-            uuid_format(uuidFormatted, sizeof(uuidFormatted), uuid);
-            printf("%s\n", uuidFormatted);
-        }
-
-        uuid_cryptorand_uninit(&rng);
-    }
-    printf("\n");
-
-
-    printf("uuid_ordered()\n");
-    {
-        for (i = 0; i < count; i += 1) {
-            uuid_ordered(uuid);
-            uuid_format(uuidFormatted, sizeof(uuidFormatted), uuid);
-            printf("%s\n", uuidFormatted);
-        }
-    }
-    printf("\n");
-
-    printf("uuid_ordered_ex()\n");
-    {
-        uuid_cryptorand rng;
-        uuid_cryptorand_init(&rng);
-
-        for (i = 0; i < count; i += 1) {
-            uuid_ordered_ex(uuid, &rng);
-            uuid_format(uuidFormatted, sizeof(uuidFormatted), uuid);
-            printf("%s\n", uuidFormatted);
-        }
-
-        uuid_cryptorand_uninit(&rng);
     }
     printf("\n");
 
@@ -158,6 +91,17 @@ int main(int argc, char** argv)
             //unsigned char ns[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; /* "00000000-0000-0000-0000-000000000000" */
 
             uuid3(uuid, ns, "Hello, World!");
+            uuid_format(uuidFormatted, sizeof(uuidFormatted), uuid);
+            printf("%s\n", uuidFormatted);
+        }
+    }
+    printf("\n");
+
+
+    printf("uuid4()\n");
+    {
+        for (i = 0; i < count; i += 1) {
+            uuid4(uuid, NULL);
             uuid_format(uuidFormatted, sizeof(uuidFormatted), uuid);
             printf("%s\n", uuidFormatted);
         }
@@ -177,6 +121,18 @@ int main(int argc, char** argv)
         }
     }
     printf("\n");
+
+
+    printf("uuid_ordered()\n");
+    {
+        for (i = 0; i < count; i += 1) {
+            uuid_ordered(uuid, NULL);
+            uuid_format(uuidFormatted, sizeof(uuidFormatted), uuid);
+            printf("%s\n", uuidFormatted);
+        }
+    }
+    printf("\n");
+
 
     (void)argc;
     (void)argv;

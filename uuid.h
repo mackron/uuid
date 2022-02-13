@@ -5,10 +5,6 @@ David Reid - mackron@gmail.com
 */
 
 /*
-Currently only versions 1 and 4 are supported, but support for other versions might be added later.
-For more information on the differences between the different UUID versions, see RFC 4122. Use
-version 1 if you want a time-based UUID. Use version 4 if you want a purely random UUID.
-
 This support all UUID versions defined in RFC 4122 except version 2. For version 3 and 5 you will
 need to provide your own MD5 and SHA-1 hasher by defining the some macros before the implementation
 of this library. Below is an example:
@@ -28,12 +24,11 @@ the implementation section, or you can use uuid.c if you prefer a traditional he
 
 Use the following APIs to generate a UUID:
 
-    uuid1(unsigned char* pUUID);
-    uuid1_ex(unsigned char* pUUID, uuid_rand* pRNG);
-    uuid4(unsigned char* pUUID);
-    uuid4_ex(unsigned char* pUUID, uuid_rand* pRNG);
-    uuid_ordered(unsigned char* pUUID);
-    uuid_ordered_ex(unsigned char* pUUID, uuid_rand* pRNG);
+    uuid1(unsigned char* pUUID, uuid_rand* pRNG);
+    uuid3(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName);
+    uuid4(unsigned char* pUUID, uuid_rand* pRNG);
+    uuid5(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName);
+    uuid_ordered(unsigned char* pUUID, uuid_rand* pRNG);
 
 If you want to use a time-based ordered UUID you can use `uuid_ordered()`. Note that this is not
 officially allowed by RFC 4122. This does not encode a version as it would break ordering.
@@ -49,17 +44,17 @@ Example:
 
     ```c
     unsigned char uuid[UUID_SIZE];
-    uuid4(uuid);
+    uuid4(uuid, NULL);
 
     char str[UUID_FORMATTED_SIZE];
     uuid_format(str, sizeof(str), uuid);
     ```
 
-With the code above the default random number generator will be used. If you want to use your own
-random number generator, you can use the `_ex()` version:
+With the code above the default random number generator will be used (second parameter). If you
+want to use your own random number generator, you can pass in a random number generator:
 
     ```c
-    uuid4_ex(uuid, &myRNG);
+    uuid4(uuid, &myRNG);
     ```
 
 The default random number generator is cryptorand: https://github.com/mackron/cryptorand. If you
@@ -70,7 +65,7 @@ have access to the implementation section, you can make use of this easily:
     uuid_cryprorand_init(&rng);
 
     for (i = 0; i < count; i += 1) {
-        uuid4_ex(uuid, &rng);
+        uuid4(uuid, &rng);
 
         // ... do something with the UUID ...
     }
@@ -103,7 +98,7 @@ Alternatively you can implement your own random number generator by inheritting 
     rng.cb.onGenerator = my_rng_generate;
 
     // Generate your GUID.
-    uuid4_ex(uuid, &myRNG);
+    uuid4(uuid, &myRNG);
     ```
 
 You can disable cryptorand and compile time with `UUID_NO_CRYPTORAND`, but by doing so you will be
@@ -151,16 +146,15 @@ typedef struct
     uuid_result (* onGenerate)(uuid_rand* pRNG, void* pBufferOut, size_t byteCount);
 } uuid_rand_callbacks;
 
+uuid_result uuid_rand_generate(uuid_rand* pRNG, void* pBufferOut, size_t byteCount);
+
 
 /* Generation. */
-uuid_result uuid1_ex(unsigned char* pUUID, uuid_rand* pRNG);
-uuid_result uuid1(unsigned char* pUUID);
+uuid_result uuid1(unsigned char* pUUID, uuid_rand* pRNG);
 uuid_result uuid3(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName);
-uuid_result uuid4_ex(unsigned char* pUUID, uuid_rand* pRNG);
-uuid_result uuid4(unsigned char* pUUID);
+uuid_result uuid4(unsigned char* pUUID, uuid_rand* pRNG);
 uuid_result uuid5(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName);
-uuid_result uuid_ordered_ex(unsigned char* pUUID, uuid_rand* pRNG);
-uuid_result uuid_ordered(unsigned char* pUUID);
+uuid_result uuid_ordered(unsigned char* pUUID, uuid_rand* pRNG);
 
 /* Formatting. */
 uuid_result uuid_format(char* pDst, size_t dstCap, const unsigned char* pUUID);
@@ -201,6 +195,24 @@ struct timespec
     long tv_nsec;
 };
 #endif
+
+
+uuid_result uuid_rand_generate(uuid_rand* pRNG, void* pBufferOut, size_t byteCount)
+{
+    uuid_rand_callbacks* pCallbacks = (uuid_rand*)pRNG;
+
+    if (pBufferOut == NULL) {
+        return UUID_INVALID_ARGS;
+    }
+
+    UUID_ZERO_MEMORY(pBufferOut, byteCount);
+
+    if (pCallbacks == NULL || pCallbacks->onGenerate == NULL) {
+        return UUID_INVALID_ARGS;
+    }
+
+    return pCallbacks->onGenerate(pRNG, pBufferOut, byteCount);
+}
 
 
 #if !defined(UUID_NO_CRYPTORAND)
@@ -407,7 +419,7 @@ static uuid_result uuid1_internal(unsigned char* pUUID, uuid_rand* pRNG)
     pUUID[7] = (unsigned char)((timeHiAndVersion >> 0) & 0xFF);
 
     /* For the clock sequence and node ID we're always using a random number. */
-    result = ((uuid_rand_callbacks*)pRNG)->onGenerate(pRNG, pUUID + 8, UUID_SIZE - 8);
+    result = uuid_rand_generate(pRNG, pUUID + 8, UUID_SIZE - 8);
     if (result != UUID_SUCCESS) {
         UUID_ZERO_MEMORY(pUUID, UUID_SIZE);
         return result;
@@ -457,7 +469,7 @@ static uuid_result uuid4_internal(unsigned char* pUUID, uuid_rand* pRNG)
     UUID_ASSERT(pRNG  != NULL);
 
     /* First just generate some random numbers. */
-    result = ((uuid_rand_callbacks*)pRNG)->onGenerate(pRNG, pUUID, UUID_SIZE);
+    result = uuid_rand_generate(pRNG, pUUID, UUID_SIZE);
     if (result != UUID_SUCCESS) {
         UUID_ZERO_MEMORY(pUUID, UUID_SIZE);
         return result;
@@ -538,7 +550,7 @@ uuid_result uuid_ordered_internal(unsigned char* pUUID, uuid_rand* pRNG)
 
 
     /* For the clock sequence and node ID we're always using a random number. */
-    result = ((uuid_rand_callbacks*)pRNG)->onGenerate(pRNG, pUUID + 8, UUID_SIZE - 8);
+    result = uuid_rand_generate(pRNG, pUUID + 8, UUID_SIZE - 8);
     if (result != UUID_SUCCESS) {
         UUID_ZERO_MEMORY(pUUID, UUID_SIZE);
         return result;
@@ -566,6 +578,7 @@ typedef enum
 
 static uuid_result uuidn(unsigned char* pUUID, uuid_rand* pRNG, const unsigned char* pNamespaceUUID, const char* pName, uuid_version version)
 {
+    uuid_result result;
 #if !defined(UUID_NO_CRYPTORAND)
     uuid_cryptorand cryptorandRNG;
 #endif
@@ -580,7 +593,7 @@ static uuid_result uuidn(unsigned char* pUUID, uuid_rand* pRNG, const unsigned c
     if (version == UUID_VERSION_1 || version == UUID_VERSION_4 || version == UUID_VERSION_ORDERED) {
         if (pRNG == NULL) {
         #if !defined(UUID_NO_CRYPTORAND)
-            uuid_result result = uuid_cryptorand_init(&cryptorandRNG);
+            result = uuid_cryptorand_init(&cryptorandRNG);
             if (result != UUID_SUCCESS) {
                 return result;
             }
@@ -594,25 +607,26 @@ static uuid_result uuidn(unsigned char* pUUID, uuid_rand* pRNG, const unsigned c
 
     switch (version)
     {
-        case UUID_VERSION_1:       return uuid1_internal(pUUID, pRNG);
-        case UUID_VERSION_2:       return UUID_NOT_IMPLEMENTED;
-        case UUID_VERSION_3:       return uuid3_internal(pUUID, pNamespaceUUID, pName);
-        case UUID_VERSION_4:       return uuid4_internal(pUUID, pRNG);
-        case UUID_VERSION_5:       return uuid5_internal(pUUID, pNamespaceUUID, pName);
-        case UUID_VERSION_ORDERED: return uuid_ordered_internal(pUUID, pRNG);
-        default: return UUID_INVALID_ARGS;  /* Unknown or unsupported version. */
+        case UUID_VERSION_1:       result = uuid1_internal(pUUID, pRNG);                  break;
+        case UUID_VERSION_2:       result = UUID_NOT_IMPLEMENTED;                         break;
+        case UUID_VERSION_3:       result = uuid3_internal(pUUID, pNamespaceUUID, pName); break;
+        case UUID_VERSION_4:       result = uuid4_internal(pUUID, pRNG);                  break;
+        case UUID_VERSION_5:       result = uuid5_internal(pUUID, pNamespaceUUID, pName); break;
+        case UUID_VERSION_ORDERED: result = uuid_ordered_internal(pUUID, pRNG);           break;
+        default:                   result = UUID_INVALID_ARGS;                            break;  /* Unknown or unsupported version. */
     };
+
+    if (pRNG == &cryptorandRNG) {
+        uuid_cryptorand_uninit(&cryptorandRNG);
+    }
+
+    return result;
 }
 
 
-uuid_result uuid1_ex(unsigned char* pUUID, uuid_rand* pRNG)
+uuid_result uuid1(unsigned char* pUUID, uuid_rand* pRNG)
 {
     return uuidn(pUUID, pRNG, NULL, NULL, UUID_VERSION_1);
-}
-
-uuid_result uuid1(unsigned char* pUUID)
-{
-    return uuid1_ex(pUUID, NULL);
 }
 
 uuid_result uuid3(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName)
@@ -620,14 +634,9 @@ uuid_result uuid3(unsigned char* pUUID, const unsigned char* pNamespaceUUID, con
     return uuidn(pUUID, NULL, pNamespaceUUID, pName, UUID_VERSION_3);
 }
 
-uuid_result uuid4_ex(unsigned char* pUUID, uuid_rand* pRNG)
+uuid_result uuid4(unsigned char* pUUID, uuid_rand* pRNG)
 {
     return uuidn(pUUID, pRNG, NULL, NULL, UUID_VERSION_4);
-}
-
-uuid_result uuid4(unsigned char* pUUID)
-{
-    return uuid4_ex(pUUID, NULL);
 }
 
 uuid_result uuid5(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName)
@@ -635,14 +644,9 @@ uuid_result uuid5(unsigned char* pUUID, const unsigned char* pNamespaceUUID, con
     return uuidn(pUUID, NULL, pNamespaceUUID, pName, UUID_VERSION_5);
 }
 
-uuid_result uuid_ordered_ex(unsigned char* pUUID, uuid_rand* pRNG)
+uuid_result uuid_ordered(unsigned char* pUUID, uuid_rand* pRNG)
 {
     return uuidn(pUUID, pRNG, NULL, NULL, UUID_VERSION_ORDERED);
-}
-
-uuid_result uuid_ordered(unsigned char* pUUID)
-{
-    return uuid_ordered_ex(pUUID, NULL);
 }
 
 
