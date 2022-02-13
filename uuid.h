@@ -654,24 +654,31 @@ uuid_result uuid_ordered(unsigned char* pUUID, uuid_rand* pRNG)
 
 
 
-static void uuid_format_byte(char* pBufferOut, unsigned char byte)
+static void uuid_format_byte(char* dst, unsigned char byte)
 {
     const char* pHexChars = "0123456789abcdef";
-    pBufferOut[0] = pHexChars[(byte & 0xF0) >> 4];
-    pBufferOut[1] = pHexChars[(byte & 0x0F)     ];
+    dst[0] = pHexChars[(byte & 0xF0) >> 4];
+    dst[1] = pHexChars[(byte & 0x0F)     ];
 }
 
-uuid_result uuid_format(char* pBufferOut, size_t bufferOutCap, const unsigned char* pUUID)
+uuid_result uuid_format(char* dst, size_t dstCap, const unsigned char* pUUID)
 {
     const char* format = "xxxx-xx-xx-xx-xxxxxx";
 
-    if (pBufferOut == NULL) {
+    if (dst == NULL) {
         return UUID_INVALID_ARGS;
     }
 
-    pBufferOut[0] = '\0';
+    if (dstCap < UUID_FORMATTED_SIZE) {
+        if (dstCap > 0) {
+            dst[0] = '\0';
+        }
 
-    if (bufferOutCap < UUID_FORMATTED_SIZE || pUUID == NULL) {
+        return UUID_INVALID_ARGS;
+    }
+
+    if (pUUID == NULL) {
+        dst[0] = '\0';
         return UUID_INVALID_ARGS;
     }
 
@@ -682,19 +689,19 @@ uuid_result uuid_format(char* pBufferOut, size_t bufferOutCap, const unsigned ch
         }
 
         if (format[0] == 'x') {
-            uuid_format_byte(pBufferOut, pUUID[0]);
-            pBufferOut += 2;
-            pUUID      += 1;
+            uuid_format_byte(dst, pUUID[0]);
+            dst   += 2;
+            pUUID += 1;
         } else {
-            pBufferOut[0] = format[0];
-            pBufferOut += 1;
+            dst[0] = format[0];
+            dst += 1;
         }
 
         format += 1;
     }
 
     /* Never forget to null terminate. */
-    pBufferOut[0] = '\0';
+    dst[0] = '\0';
 
     return UUID_SUCCESS;
 }
