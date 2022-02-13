@@ -5,22 +5,111 @@ David Reid - mackron@gmail.com
 */
 
 /*
-Currently only version 4 is supported, but support for other versions might be added later.
+Currently only versions 1 and 4 are supported, but support for other versions might be added later.
+For more information on the differences between the different UUID versions, see RFC 4122. Use
+version 1 if you want a time-based UUID. Use version 4 if you want a purely random UUID.
 
-Use `uuid_generate_4()` to generate a UUID. Use `uuid_generate_4_ex()` if you want to use a custom
-random number generator instead of the default (see below). If you want to format the UUID for
-presentation purposes, use `uuid_format()` after generating the UUID.
+There is no need to link to anything with this library. You can use UUID_IMPLEMENTATION to define
+the implementation section, or you can use uuid.c if you prefer a traditional header/source pair.
 
-By default this uses crytorand for random number generation: https://github.com/mackron/cryptorand.
-If you would rather use your own, you can do so by implementing `uuid_rand_callbacks` and passing a
-pointer to it to `uuid_generate_4_ex()`. You can use `UUID_NO_CRYPTORAND` to disable cryptorand at
-compile time.
+Use the following APIs to generate a UUID:
+
+    uuid1(unsigned char* pUUID);
+    uuid1_ex(unsigned char* pUUID, uuid_rand* pRNG);
+    uuid4(unsigned char* pUUID);
+    uuid4_ex(unsigned char* pUUID, uuid_rand* pRNG);
+
+Use the following APIs to format the UUID as a string:
+
+    uuid_format(char* pDst, size_t dstCap, const unsigned char* pUUID);
+
+The size of the UUID buffer must be at least `UUID_SIZE` (16 bytes). For formatted strings the
+destination buffer should be at least `UUID_FORMATTED_SIZE`.
+
+Example:
+
+    ```c
+    unsigned char uuid[UUID_SIZE];
+    uuid4(uuid);
+
+    char str[UUID_FORMATTED_SIZE];
+    uuid_format(str, sizeof(str), uuid);
+    ```
+
+With the code above the default random number generator will be used. If you want to use your own
+random number generator, you can use the `_ex()` version:
+
+    ```c
+    uuid4_ex(uuid, &myRNG);
+    ```
+
+The default random number generator is cryptorand: https://github.com/mackron/cryptorand. If you
+have access to the implementation section, you can make use of this easily:
+
+    ```c
+    uuid_cryptorand rng;
+    uuid_cryprorand_init(&rng);
+
+    for (i = 0; i < count; i += 1) {
+        uuid4_ex(uuid, &rng);
+
+        // ... do something with the UUID ...
+    }
+
+    uuiid_cryptorand_uninit(&rng);
+    ```
+
+Alternatively you can implement your own random number generator by inheritting from
+`uuid_rand_callbacks` like so:
+
+    ```c
+    typedef struct
+    {
+        uuid_rand_callbacks cb;
+    } my_rng;
+
+    static uuid_result my_rng_generate(uuid_rand* pRNG, void* pBufferOut, size_t byteCount)
+    {
+        my_rng* pMyRNG = (my_rng*)pRNG;
+
+        // ... do random number generation here. Output byteCount bytes to pBufferOut.
+
+        return UUID_SUCCESS;
+    }
+
+    ...
+
+    // Initialize your random number generator.
+    my_rng myRNG;
+    rng.cb.onGenerator = my_rng_generate;
+
+    // Generate your GUID.
+    uuid4_ex(uuid, &myRNG);
+    ```
+
+You can disable cryptorand and compile time with `UUID_NO_CRYPTORAND`, but by doing so you will be
+required to specify your own random number generator. This is useful if you already have a good
+quality random number generator in your code base and want to save a little bit of space.
 */
 #ifndef uuid_h
 #define uuid_h
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+/*
+Need to set this or else we'll get errors about timespec not being defined. This also needs to be
+set before including any standard headers.
+*/
+#if !defined(_WIN32)
+    #ifndef _XOPEN_SOURCE
+    #define _XOPEN_SOURCE   700
+    #else
+        #if _XOPEN_SOURCE < 500
+        #error _XOPEN_SOURCE must be >= 500. uuid is not usable.
+        #endif
+    #endif
 #endif
 
 #include <stddef.h>
@@ -30,9 +119,11 @@ extern "C" {
 
 typedef enum
 {
-    UUID_SUCCESS      =  0,
-    UUID_ERROR        = -1,
-    UUID_INVALID_ARGS = -2
+    UUID_SUCCESS           =  0,
+    UUID_ERROR             = -1,
+    UUID_INVALID_ARGS      = -2,
+    UUID_INVALID_OPERATION = -3,
+    UUID_NOT_IMPLEMENTED   = -29
 } uuid_result;
 
 typedef void uuid_rand;
@@ -41,20 +132,15 @@ typedef struct
     uuid_result (* onGenerate)(uuid_rand* pRNG, void* pBufferOut, size_t byteCount);
 } uuid_rand_callbacks;
 
-/*
-Generates the raw data of a UUID.
-*/
-uuid_result uuid_generate_4_ex(unsigned char* pUUID, uuid_rand* pRNG);
 
-/*
-Generates the raw data of a UUID.
-*/
-uuid_result uuid_generate_4(unsigned char* pUUID);
+/* Generation. */
+uuid_result uuid1_ex(unsigned char* pUUID, uuid_rand* pRNG);
+uuid_result uuid1(unsigned char* pUUID);
+uuid_result uuid4_ex(unsigned char* pUUID, uuid_rand* pRNG);
+uuid_result uuid4(unsigned char* pUUID);
 
-/*
-Formats the UUID data as a string.
-*/
-uuid_result uuid_format(char* pBufferOut, size_t bufferOutCap, const unsigned char* pUUID);
+/* Formatting. */
+uuid_result uuid_format(char* pDst, size_t dstCap, const unsigned char* pUUID);
 
 #ifdef __cplusplus
 }
@@ -65,9 +151,33 @@ uuid_result uuid_format(char* pBufferOut, size_t bufferOutCap, const unsigned ch
 #ifndef uuid_c
 #define uuid_c
 
+typedef unsigned short     uuid_uint16;
+typedef unsigned int       uuid_uint32;
+typedef unsigned long long uuid_uint64;
+
 #include <string.h>
 #define UUID_ZERO_MEMORY(p, sz) memset((p), 0, (sz))
 #define UUID_ZERO_OBJECT(o)     UUID_ZERO_MEMORY((o), sizeof(*o))
+
+#ifndef UUID_ASSERT
+    #include <assert.h>
+    #define UUID_ASSERT(condition)  assert(condition)
+#endif
+
+#include <time.h>   /* For timespec. */
+
+#ifndef TIME_UTC
+#define TIME_UTC    1
+#endif
+
+#if (defined(_MSC_VER) && _MSC_VER < 1900) || defined(__DMC__)  /* 1900 = Visual Studio 2015 */
+struct timespec
+{
+    time_t tv_sec;
+    long tv_nsec;
+};
+#endif
+
 
 #if !defined(UUID_NO_CRYPTORAND)
 #define CRYPTORAND_IMPLEMENTATION
@@ -132,19 +242,165 @@ static void uuid_cryptorand_uninit(uuid_cryptorand* pRNG)
 #endif /* UUID_NO_CRYPTORAND */
 
 
-uuid_result uuid_generate_4_ex(unsigned char* pUUID, uuid_rand* pRNG)
+#if defined(_WIN32)
+#include <windows.h>
+
+static int uuid_timespec_get(struct timespec* ts, int base)
+{
+    FILETIME ft;
+    LONGLONG current100Nanoseconds;
+
+    if (ts == NULL) {
+        return 0;   /* 0 = error. */
+    }
+
+    ts->tv_sec  = 0;
+    ts->tv_nsec = 0;
+
+    /* Currently only supporting UTC. */
+    if (base != TIME_UTC) {
+        return 0;   /* 0 = error. */
+    }
+
+    GetSystemTimeAsFileTime(&ft);
+    current100Nanoseconds = (((LONGLONG)ft.dwHighDateTime << 32) | (LONGLONG)ft.dwLowDateTime);
+    current100Nanoseconds = current100Nanoseconds - ((LONGLONG)116444736 * 1000000000); /* Windows to Unix epoch. Normal value is 116444736000000000LL, but VC6 doesn't like 64-bit constants. */
+
+    ts->tv_sec  = (time_t)(current100Nanoseconds / 10000000);
+    ts->tv_nsec =  (long)((current100Nanoseconds - (ts->tv_sec * 10000000)) * 100);
+
+    return base;
+}
+#else
+#include <sys/time.h>   /* For timeval. */
+
+struct timespec uuid_timespec_from_timeval(struct timeval* tv)
+{
+    struct timespec ts;
+
+    ts.tv_sec  = tv->tv_sec;
+    ts.tv_nsec = tv->tv_usec * 1000;
+
+    return ts;
+}
+
+static int uuid_timespec_get(struct timespec* ts, int base)
+{
+    /*
+    This is annoying to get working on all compilers. Here's the hierarchy:
+
+        * If using C11, use timespec_get(); else
+        * If _POSIX_C_SOURCE >= 199309L, use clock_gettime(CLOCK_REALTIME, ...); else
+        * Fall back to gettimeofday().
+    */
+    #if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__APPLE__)
+    {
+        return timespec_get(ts, base);
+    }
+    #else
+    {
+        if (base != TIME_UTC) {
+            return 0;   /* Only TIME_UTC is supported. 0 = error. */
+        }
+
+        #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+        {
+            if (clock_gettime(CLOCK_REALTIME, ts) != 0) {
+                return 0;   /* Failed to retrieve the time. 0 = error. */
+            }
+
+            /* Getting here means we were successful. On success, need to return base (strange...) */
+            return base;
+        }
+        #else
+        {
+            struct timeval tv;
+            if (gettimeofday(&tv, NULL) != 0) {
+                return 0;   /* Failed to retrieve the time. 0 = error. */
+            }
+
+            *ts = uuid_timespec_from_timeval(&tv);
+            return base;
+        }
+        #endif  /* _POSIX_C_SOURCE >= 199309L */
+    }
+    #endif  /* C11 */
+}
+#endif
+
+static uuid_result uuid_get_time(uuid_uint64* pTime)
+{
+    struct timespec ts;
+
+    if (pTime == NULL) {
+        return UUID_INVALID_ARGS;
+    }
+
+    *pTime = 0;
+
+    if (uuid_timespec_get(&ts, TIME_UTC) == 0) {
+        return UUID_ERROR;  /* Failed to retrieve time. */
+    }
+
+    *pTime  = (ts.tv_sec * 10000000) + (ts.tv_nsec / 100);      /* In 100-nanoseconds resolution. */
+    *pTime += (((uuid_uint64)0x01B21DD2 << 32) | 0x13814000);   /* Conversion from Unix Epoch to UUID Epoch. Weird format here is for compatibility with VC6 because it doesn't like 64-bit constants. */
+
+    return UUID_SUCCESS;
+}
+
+uuid_result uuid1_internal(unsigned char* pUUID, uuid_rand* pRNG)
+{
+    uuid_result result;
+    uuid_uint64 time;
+    uuid_uint32 timeLow;
+    uuid_uint16 timeMid;
+    uuid_uint16 timeHiAndVersion;
+
+    UUID_ASSERT(pUUID != NULL);
+    UUID_ASSERT(pRNG  != NULL);
+
+    result = uuid_get_time(&time);
+    if (result != UUID_SUCCESS) {
+        return result;
+    }
+
+    timeLow          = (uuid_uint32)((time >>  0) & 0xFFFFFFFF);
+    timeMid          = (uuid_uint16)((time >> 32) & 0x0000FFFF);
+    timeHiAndVersion = (uuid_uint16)((time >> 48) & 0x00000FFF) | 0x1000;
+
+    /* Time Low */
+    pUUID[0] = (unsigned char)((timeLow >> 24) & 0xFF);
+    pUUID[1] = (unsigned char)((timeLow >> 16) & 0xFF);
+    pUUID[2] = (unsigned char)((timeLow >>  8) & 0xFF);
+    pUUID[3] = (unsigned char)((timeLow >>  0) & 0xFF);
+
+    /* Time Mid */
+    pUUID[4] = (unsigned char)((timeMid >> 8) & 0xFF);
+    pUUID[5] = (unsigned char)((timeMid >> 0) & 0xFF);
+
+    /* Time High and Version */
+    pUUID[6] = (unsigned char)((timeHiAndVersion >> 8) & 0xFF);
+    pUUID[7] = (unsigned char)((timeHiAndVersion >> 0) & 0xFF);
+
+    /* For the clock sequence and node ID we're always using a random number. */
+    result = ((uuid_rand_callbacks*)pRNG)->onGenerate(pRNG, pUUID + 8, UUID_SIZE - 8);
+    if (result != UUID_SUCCESS) {
+        UUID_ZERO_MEMORY(pUUID, UUID_SIZE);
+        return result;
+    }
+
+    /* Byte 8 needs to be updated to reflect the variant. In our case it'll always be Variant 1. */
+    pUUID[8] = 0x80 | (pUUID[8] & 0x3F);
+
+    return UUID_SUCCESS;
+}
+
+uuid_result uuid4_internal(unsigned char* pUUID, uuid_rand* pRNG)
 {
     uuid_result result;
 
-    if (pUUID == NULL) {
-        return UUID_INVALID_ARGS;
-    }
-
-    UUID_ZERO_MEMORY(pUUID, UUID_SIZE);
-
-    if (pRNG == NULL) {
-        return UUID_INVALID_ARGS;
-    }
+    UUID_ASSERT(pUUID != NULL);
+    UUID_ASSERT(pRNG  != NULL);
 
     /* First just generate some random numbers. */
     result = ((uuid_rand_callbacks*)pRNG)->onGenerate(pRNG, pUUID, UUID_SIZE);
@@ -154,42 +410,84 @@ uuid_result uuid_generate_4_ex(unsigned char* pUUID, uuid_rand* pRNG)
     }
 
     /* Byte 6 needs to be updated so the version number is set appropriately. We're using version 4 for now. */
-    pUUID[6] = 0x40 | (pUUID[7] & 0x0F);
+    pUUID[6] = 0x40 | (pUUID[6] & 0x0F);
 
     /* Byte 8 needs to be updated to reflect the variant. In our case it'll always be Variant 1. */
-    pUUID[8] = 0x80 | (pUUID[9] & 0x3F);
+    pUUID[8] = 0x80 | (pUUID[8] & 0x3F);
 
     return UUID_SUCCESS;
 }
 
-uuid_result uuid_generate_4(unsigned char* pUUID)
+
+typedef enum
 {
+    UUID_VERSION_1 = 1,     /* Timed. */
+    UUID_VERSION_2 = 2,     /* ??? */
+    UUID_VERSION_3 = 3,     /* Named with MD5 hashing. */
+    UUID_VERSION_4 = 4,     /* Random. */
+    UUID_VERSION_5 = 5      /* Named with SHA1 hashing. */
+} uuid_version;
+
+static uuid_result uuidn(unsigned char* pUUID, uuid_rand* pRNG, uuid_version version)
+{
+#if !defined(UUID_NO_CRYPTORAND)
+    uuid_cryptorand cryptorandRNG;
+#endif
+
     if (pUUID == NULL) {
         return UUID_INVALID_ARGS;
     }
 
     UUID_ZERO_MEMORY(pUUID, UUID_SIZE);
 
-#if !defined(UUID_NO_CRYPTORAND)
-    uuid_result result;
-    uuid_cryptorand rng;
+    /* We need a random number generator if we're using version 1 or 4. */
+    if (version == UUID_VERSION_1 || version == UUID_VERSION_4) {
+        if (pRNG == NULL) {
+        #if !defined(UUID_NO_CRYPTORAND)
+            uuid_result result = uuid_cryptorand_init(&cryptorandRNG);
+            if (result != UUID_SUCCESS) {
+                return result;
+            }
 
-    result = uuid_cryptorand_init(&rng);
-    if (result != UUID_SUCCESS) {
-        return result;
+            pRNG = &cryptorandRNG;
+        #else
+            return UUID_INVALID_ARGS;   /* No random number generator available. */
+        #endif
+        }
     }
 
-    result = uuid_generate_4_ex(pUUID, &rng);
-
-    /* We're done with the random number generator. */
-    uuid_cryptorand_uninit(&rng);
-
-    return result;
-#else
-    /* cryptorand has been disabled. No way to generate random numbers. */
-    return UUID_ERROR;
-#endif
+    switch (version)
+    {
+        case UUID_VERSION_1: return uuid1_internal(pUUID, pRNG);
+        case UUID_VERSION_2: return UUID_NOT_IMPLEMENTED;
+        case UUID_VERSION_3: return UUID_NOT_IMPLEMENTED;
+        case UUID_VERSION_4: return uuid4_internal(pUUID, pRNG);
+        case UUID_VERSION_5: return UUID_NOT_IMPLEMENTED;
+        default: return UUID_INVALID_ARGS;  /* Unknown or unsupported version. */
+    };
 }
+
+
+uuid_result uuid1_ex(unsigned char* pUUID, uuid_rand* pRNG)
+{
+    return uuidn(pUUID, pRNG, UUID_VERSION_1);
+}
+
+uuid_result uuid1(unsigned char* pUUID)
+{
+    return uuid1_ex(pUUID, NULL);
+}
+
+uuid_result uuid4_ex(unsigned char* pUUID, uuid_rand* pRNG)
+{
+    return uuidn(pUUID, pRNG, UUID_VERSION_4);
+}
+
+uuid_result uuid4(unsigned char* pUUID)
+{
+    return uuid4_ex(pUUID, NULL);
+}
+
 
 static void uuid_format_byte(char* pBufferOut, unsigned char byte)
 {
