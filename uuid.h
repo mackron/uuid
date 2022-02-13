@@ -616,9 +616,11 @@ static uuid_result uuidn(unsigned char* pUUID, uuid_rand* pRNG, const unsigned c
         default:                   result = UUID_INVALID_ARGS;                            break;  /* Unknown or unsupported version. */
     };
 
+#if !defined(UUID_NO_CRYPTORAND)
     if (pRNG == &cryptorandRNG) {
         uuid_cryptorand_uninit(&cryptorandRNG);
     }
+#endif
 
     return result;
 }
