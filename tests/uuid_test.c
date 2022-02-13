@@ -1,10 +1,10 @@
-#include "../external/md5.c"
+#include "../external/md5/md5.c"
 #include "../external/sha1.c"
 
-#define UUID_MD5_CTX_TYPE               struct md5_context
+#define UUID_MD5_CTX_TYPE               md5_context
 #define UUID_MD5_INIT(ctx)              md5_init(ctx)
-#define UUID_MD5_FINAL(ctx, digest)     md5_finalize(ctx, (struct md5_digest*)(digest))
-#define UUID_MD5_UPDATE(ctx, src, sz)   md5_update(ctx, src, (uint32_t)(sz))
+#define UUID_MD5_FINAL(ctx, digest)     md5_finalize(ctx, (unsigned char*)(digest))
+#define UUID_MD5_UPDATE(ctx, src, sz)   md5_update(ctx, src, (size_t)(sz))
 
 #define UUID_SHA1_CTX_TYPE              SHA1_CTX
 #define UUID_SHA1_INIT(ctx)             SHA1Init(ctx)
@@ -19,7 +19,7 @@
 int main(int argc, char** argv)
 {
     unsigned char uuid[UUID_SIZE];
-    char uuidFormatted[UUID_FORMATTED_SIZE];
+    char uuidFormatted[UUID_SIZE_FORMATTED];
     size_t i;
     size_t count = 10;
 

@@ -1,3 +1,6 @@
 [submodule "external/cryptorand"]
 	path = external/cryptorand
 	url = https://github.com/mackron/cryptorand.git
+[submodule "external/md5"]
+	path = external/md5
+	url = https://github.com/mackron/md5.git
