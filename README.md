@@ -6,18 +6,21 @@
 </p>
 
 This supports all UUID versions defined in RFC 4122 except version 2. For version 3 and 5 you will
-need to provide your own MD5 and SHA-1 hasher by defining the some macros before the implementation
-of this library. Below is an example:
+need to provide your own MD5 and SHA-1 hashing implementation by defining the some macros before
+the implementation of this library. Below is an example:
 
-    #define UUID_MD5_CTX_TYPE               struct md5_context
+    #define UUID_MD5_CTX_TYPE               md5_context
     #define UUID_MD5_INIT(ctx)              md5_init(ctx)
-    #define UUID_MD5_FINAL(ctx, digest)     md5_finalize(ctx, (struct md5_digest*)(digest))
-    #define UUID_MD5_UPDATE(ctx, src, sz)   md5_update(ctx, src, (uint32_t)(sz))
+    #define UUID_MD5_FINAL(ctx, digest)     md5_finalize(ctx, (unsigned char*)(digest))
+    #define UUID_MD5_UPDATE(ctx, src, sz)   md5_update(ctx, src, (size_t)(sz))
 
     #define UUID_SHA1_CTX_TYPE              SHA1_CTX
     #define UUID_SHA1_INIT(ctx)             SHA1Init(ctx)
     #define UUID_SHA1_FINAL(ctx, digest)    SHA1Final(digest, ctx)
     #define UUID_SHA1_UPDATE(ctx, src, sz)  SHA1Update(ctx, src, (uint32_t)(sz));
+
+A public domain MD5 implementation can be found in this repository. Alternatively you can use the
+MD5 hashing implementation from here: https://github.com/mackron/md5.
 
 There is no need to link to anything with this library. You can use UUID_IMPLEMENTATION to define
 the implementation section, or you can use uuid.c if you prefer a traditional header/source pair.
@@ -38,7 +41,7 @@ Use the following APIs to format the UUID as a string:
     uuid_format(char* pDst, size_t dstCap, const unsigned char* pUUID);
 
 The size of the UUID buffer must be at least `UUID_SIZE` (16 bytes). For formatted strings the
-destination buffer should be at least `UUID_FORMATTED_SIZE`.
+destination buffer should be at least `UUID_SIZE_FORMATTED`.
 
 Example:
 
@@ -46,7 +49,7 @@ Example:
     unsigned char uuid[UUID_SIZE];
     uuid4(uuid, NULL);
 
-    char str[UUID_FORMATTED_SIZE];
+    char str[UUID_SIZE_FORMATTED];
     uuid_format(str, sizeof(str), uuid);
     ```
 
