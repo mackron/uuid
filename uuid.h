@@ -14,13 +14,18 @@ the implementation of this library. Below is an example:
     #define UUID_MD5_FINAL(ctx, digest)     md5_finalize(ctx, (unsigned char*)(digest))
     #define UUID_MD5_UPDATE(ctx, src, sz)   md5_update(ctx, src, (size_t)(sz))
 
-    #define UUID_SHA1_CTX_TYPE              SHA1_CTX
-    #define UUID_SHA1_INIT(ctx)             SHA1Init(ctx)
-    #define UUID_SHA1_FINAL(ctx, digest)    SHA1Final(digest, ctx)
-    #define UUID_SHA1_UPDATE(ctx, src, sz)  SHA1Update(ctx, src, (uint32_t)(sz));
+    #define UUID_SHA1_CTX_TYPE              sha1_context
+    #define UUID_SHA1_INIT(ctx)             sha1_init(ctx)
+    #define UUID_SHA1_FINAL(ctx, digest)    sha1_finalize(ctx, (unsigned char*)(digest))
+    #define UUID_SHA1_UPDATE(ctx, src, sz)  sha1_update(ctx, src, (size_t)(sz));
 
-A public domain MD5 implementation can be found in this repository. Alternatively you can use the
-MD5 hashing implementation from here: https://github.com/mackron/md5.
+A public domain MD5 and SHA-1 hashing implmentation can be found here:
+
+    * https://github.com/mackron/md5
+    * https://github.com/mackron/sha1
+
+These are included as submodules in this repository for your convenience but need not be used if
+you would rather use a different implementation.
 
 There is no need to link to anything with this library. You can use UUID_IMPLEMENTATION to define
 the implementation section, or you can use uuid.c if you prefer a traditional header/source pair.

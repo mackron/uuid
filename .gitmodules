@@ -4,3 +4,6 @@
 [submodule "external/md5"]
 	path = external/md5
 	url = https://github.com/mackron/md5.git
+[submodule "external/sha1"]
+	path = external/sha1
+	url = https://github.com/mackron/sha1.git
