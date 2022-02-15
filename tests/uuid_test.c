@@ -1,6 +1,10 @@
-#include "../external/md5/md5.c"
-#include "../external/sha1/sha1.c"
+#include "../external/md5/md5.c"    /* <-- Enables version 3. */
+#include "../external/sha1/sha1.c"  /* <-- Enables version 5. */
 
+/*
+The macros below can be used to enable a custom MD5 and/or SHA-1 implementation.
+*/
+#if 0
 #define UUID_MD5_CTX_TYPE               md5_context
 #define UUID_MD5_INIT(ctx)              md5_init(ctx)
 #define UUID_MD5_FINAL(ctx, digest)     md5_finalize(ctx, (unsigned char*)(digest))
@@ -10,6 +14,7 @@
 #define UUID_SHA1_INIT(ctx)             sha1_init(ctx)
 #define UUID_SHA1_FINAL(ctx, digest)    sha1_finalize(ctx, (unsigned char*)(digest))
 #define UUID_SHA1_UPDATE(ctx, src, sz)  sha1_update(ctx, src, (size_t)(sz));
+#endif
 
 #define UUID_IMPLEMENTATION
 #include "../uuid.h"

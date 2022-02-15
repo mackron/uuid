@@ -25,7 +25,15 @@ A public domain MD5 and SHA-1 hashing implmentation can be found here:
   * https://github.com/mackron/sha1
 
 These are included as submodules in this repository for your convenience but need not be used if
-you would rather use a different implementation.
+you would rather use a different implementation. If you want to use these libraries, instead of
+defining the above macros you can just include them before the implementation like so and they'll
+automatically be detected:
+
+    #include "external/md5/md5.c"    // <-- Enables version 3.
+    #include "external/sha1/sha1.c"  // <-- Enables version 5.
+
+    #define UUID_IMPLEMENTATION
+    #include "uuid.h"
 
 There is no need to link to anything with this library. You can use UUID_IMPLEMENTATION to define
 the implementation section, or you can use uuid.c if you prefer a traditional header/source pair.
@@ -194,6 +202,26 @@ struct timespec
     time_t tv_sec;
     long tv_nsec;
 };
+#endif
+
+
+/* Define default MD5 and SHA-1 implementations if available. */
+#if !defined(UUID_MD5_CTX_TYPE)
+    #if defined(md5_h) && defined(MD5_SIZE) && defined(MD5_SIZE_FORMATTED)  /* <-- Is this enough to detect our default MD5 implementation reliably? */
+        #define UUID_MD5_CTX_TYPE               md5_context
+        #define UUID_MD5_INIT(ctx)              md5_init(ctx)
+        #define UUID_MD5_FINAL(ctx, digest)     md5_finalize(ctx, (unsigned char*)(digest))
+        #define UUID_MD5_UPDATE(ctx, src, sz)   md5_update(ctx, src, (size_t)(sz))
+    #endif
+#endif
+
+#if !defined(UUID_SHA1_CTX_TYPE)
+    #if defined(sha1_h) && defined(SHA1_SIZE) && defined(SHA1_SIZE_FORMATTED) /* <-- Is this enough to detect our default SHA-1 implementation reliably? */
+        #define UUID_SHA1_CTX_TYPE              sha1_context
+        #define UUID_SHA1_INIT(ctx)             sha1_init(ctx)
+        #define UUID_SHA1_FINAL(ctx, digest)    sha1_finalize(ctx, (unsigned char*)(digest))
+        #define UUID_SHA1_UPDATE(ctx, src, sz)  sha1_update(ctx, src, (size_t)(sz));
+    #endif
 #endif
 
 
