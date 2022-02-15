@@ -21,8 +21,8 @@ the implementation of this library. Below is an example:
 
 A public domain MD5 and SHA-1 hashing implmentation can be found here:
 
-    * https://github.com/mackron/md5
-    * https://github.com/mackron/sha1
+  * https://github.com/mackron/md5
+  * https://github.com/mackron/sha1
 
 These are included as submodules in this repository for your convenience but need not be used if
 you would rather use a different implementation.
@@ -50,25 +50,20 @@ destination buffer should be at least `UUID_SIZE_FORMATTED`.
 
 Example:
 
-    ```c
     unsigned char uuid[UUID_SIZE];
     uuid4(uuid, NULL);
 
     char str[UUID_SIZE_FORMATTED];
     uuid_format(str, sizeof(str), uuid);
-    ```
 
 With the code above the default random number generator will be used (second parameter). If you
 want to use your own random number generator, you can pass in a random number generator:
 
-    ```c
     uuid4(uuid, &myRNG);
-    ```
 
 The default random number generator is cryptorand: https://github.com/mackron/cryptorand. If you
 have access to the implementation section, you can make use of this easily:
 
-    ```c
     uuid_cryptorand rng;
     uuid_cryprorand_init(&rng);
 
@@ -79,12 +74,10 @@ have access to the implementation section, you can make use of this easily:
     }
 
     uuiid_cryptorand_uninit(&rng);
-    ```
 
 Alternatively you can implement your own random number generator by inheritting from
 `uuid_rand_callbacks` like so:
 
-    ```c
     typedef struct
     {
         uuid_rand_callbacks cb;
@@ -107,7 +100,6 @@ Alternatively you can implement your own random number generator by inheritting 
 
     // Generate your GUID.
     uuid4(uuid, &myRNG);
-    ```
 
 You can disable cryptorand and compile time with `UUID_NO_CRYPTORAND`, but by doing so you will be
 required to specify your own random number generator. This is useful if you already have a good
