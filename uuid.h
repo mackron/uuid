@@ -176,9 +176,13 @@ uuid_result uuid_format(char* dst, size_t dstCap, const unsigned char* pUUID);
 #ifndef uuid_c
 #define uuid_c
 
-typedef unsigned short     uuid_uint16;
-typedef unsigned int       uuid_uint32;
-typedef unsigned long long uuid_uint64;
+typedef unsigned short         uuid_uint16;
+typedef unsigned int           uuid_uint32;
+#if defined(_MSC_VER)
+    typedef unsigned __int64   uuid_uint64;
+#else
+    typedef unsigned long long uuid_uint64;
+#endif
 
 #include <string.h>
 #define UUID_COPY_MEMORY(dst, src, sz)  memcpy((dst), (src), (sz))
@@ -428,9 +432,9 @@ static uuid_result uuid1_internal(unsigned char* pUUID, uuid_rand* pRNG)
         return result;
     }
 
-    timeLow          = (uuid_uint32)((time >>  0) & 0xFFFFFFFF);
-    timeMid          = (uuid_uint16)((time >> 32) & 0x0000FFFF);
-    timeHiAndVersion = (uuid_uint16)((time >> 48) & 0x00000FFF) | 0x1000;
+    timeLow          = (uuid_uint32) ((time >>  0) & 0xFFFFFFFF);
+    timeMid          = (uuid_uint16) ((time >> 32) & 0x0000FFFF);
+    timeHiAndVersion = (uuid_uint16)(((time >> 48) & 0x00000FFF) | 0x1000);
 
     /* Time Low */
     pUUID[0] = (unsigned char)((timeLow >> 24) & 0xFF);
@@ -454,7 +458,7 @@ static uuid_result uuid1_internal(unsigned char* pUUID, uuid_rand* pRNG)
     }
 
     /* Byte 8 needs to be updated to reflect the variant. In our case it'll always be Variant 1. */
-    pUUID[8] = 0x80 | (pUUID[8] & 0x3F);
+    pUUID[8] = (unsigned char)(0x80 | (pUUID[8] & 0x3F));
 
     return UUID_SUCCESS;
 }
@@ -475,10 +479,10 @@ static uuid_result uuid3_internal(unsigned char* pUUID, const unsigned char* pNa
     UUID_COPY_MEMORY(pUUID, hash, UUID_SIZE);
 
     /* Byte 6 needs to be updated so the version number is set appropriately. */
-    pUUID[6] = 0x30 | (pUUID[6] & 0x0F);
+    pUUID[6] = (unsigned char)(0x30 | (pUUID[6] & 0x0F));
 
     /* Byte 8 needs to be updated to reflect the variant. In our case it'll always be Variant 1. */
-    pUUID[8] = 0x80 | (pUUID[8] & 0x3F);
+    pUUID[8] = (unsigned char)(0x80 | (pUUID[8] & 0x3F));
 
     return UUID_SUCCESS;
 #else
@@ -504,10 +508,10 @@ static uuid_result uuid4_internal(unsigned char* pUUID, uuid_rand* pRNG)
     }
 
     /* Byte 6 needs to be updated so the version number is set appropriately. */
-    pUUID[6] = 0x40 | (pUUID[6] & 0x0F);
+    pUUID[6] = (unsigned char)(0x40 | (pUUID[6] & 0x0F));
 
     /* Byte 8 needs to be updated to reflect the variant. In our case it'll always be Variant 1. */
-    pUUID[8] = 0x80 | (pUUID[8] & 0x3F);
+    pUUID[8] = (unsigned char)(0x80 | (pUUID[8] & 0x3F));
 
     return UUID_SUCCESS;
 }
@@ -528,10 +532,10 @@ static uuid_result uuid5_internal(unsigned char* pUUID, const unsigned char* pNa
     UUID_COPY_MEMORY(pUUID, hash, UUID_SIZE);
 
     /* Byte 6 needs to be updated so the version number is set appropriately. */
-    pUUID[6] = 0x50 | (pUUID[6] & 0x0F);
+    pUUID[6] = (unsigned char)(0x50 | (pUUID[6] & 0x0F));
 
     /* Byte 8 needs to be updated to reflect the variant. In our case it'll always be Variant 1. */
-    pUUID[8] = 0x80 | (pUUID[8] & 0x3F);
+    pUUID[8] = (unsigned char)(0x80 | (pUUID[8] & 0x3F));
 
     return UUID_SUCCESS;
 #else
@@ -585,10 +589,10 @@ uuid_result uuid_ordered_internal(unsigned char* pUUID, uuid_rand* pRNG)
     }
 
     /* Setting the version number breaks the ordering property of these UUIDs so I'm leaving this unset. */
-    /*pUUID[6] = 0x40 | (pUUID[6] & 0x0F);*/
+    /*pUUID[6] = (unsigned char)(0x40 | (pUUID[6] & 0x0F));*/
 
     /* Byte 8 needs to be updated to reflect the variant. In our case it'll always be Variant 1. */
-    pUUID[8] = 0x80 | (pUUID[8] & 0x3F);
+    pUUID[8] = (unsigned char)(0x80 | (pUUID[8] & 0x3F));
 
     return UUID_SUCCESS;
 }
