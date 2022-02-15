@@ -25,7 +25,15 @@ A public domain MD5 and SHA-1 hashing implmentation can be found here:
   * https://github.com/mackron/sha1
 
 These are included as submodules in this repository for your convenience but need not be used if
-you would rather use a different implementation.
+you would rather use a different implementation. If you want to use these libraries, instead of
+defining the above macros you can just include them before the implementation like so and they'll
+automatically be detected:
+
+    #include "external/md5/md5.c"    // <-- Enables version 3.
+    #include "external/sha1/sha1.c"  // <-- Enables version 5.
+
+    #define UUID_IMPLEMENTATION
+    #include "uuid.h"
 
 There is no need to link to anything with this library. You can use UUID_IMPLEMENTATION to define
 the implementation section, or you can use uuid.c if you prefer a traditional header/source pair.
