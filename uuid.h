@@ -120,20 +120,6 @@ quality random number generator in your code base and want to save a little bit 
 extern "C" {
 #endif
 
-/*
-Need to set this or else we'll get errors about timespec not being defined. This also needs to be
-set before including any standard headers.
-*/
-#if !defined(_WIN32)
-    #ifndef _XOPEN_SOURCE
-    #define _XOPEN_SOURCE   700
-    #else
-        #if _XOPEN_SOURCE < 500
-        #error _XOPEN_SOURCE must be >= 500. uuid is not usable.
-        #endif
-    #endif
-#endif
-
 #include <stddef.h>
 
 #define UUID_SIZE           16
@@ -200,12 +186,28 @@ typedef unsigned int           uuid_uint32;
 #define TIME_UTC    1
 #endif
 
-#if (defined(_MSC_VER) && _MSC_VER < 1900) || defined(__DMC__)  /* 1900 = Visual Studio 2015 */
-struct timespec
-{
-    time_t tv_sec;
-    long tv_nsec;
-};
+/*
+We use `timespec` as the bridge for the cross-platform part of time retrieval. The annoying thing
+about this is that support varies depending on the age of the compiler. Since we're not exposing
+any of our timing functions publicly, the easiest way is to just define our own timespec-compatible
+struct and convert between the standard version and our version, depending on the compiler.
+*/
+#if 1
+    struct uuid_timespec
+    {
+        time_t tv_sec;
+        long tv_nsec;
+    };
+#else
+    #if (defined(_MSC_VER) && _MSC_VER < 1900) || defined(__DMC__) || (defined(_XOPEN_SOURCE) && _XOPEN_SOURCE < 500) || (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE < 199309L) || defined(__STRICT_ANSI__)  /* 1900 = Visual Studio 2015 */
+    struct uuid_timespec
+    {
+        time_t tv_sec;
+        long tv_nsec;
+    };
+    #else
+    #define uuid_timespec timespec
+    #endif
 #endif
 
 
@@ -313,7 +315,7 @@ static void uuid_cryptorand_uninit(uuid_cryptorand* pRNG)
 #if defined(_WIN32)
 #include <windows.h>
 
-static int uuid_timespec_get(struct timespec* ts, int base)
+static int uuid_timespec_get(struct uuid_timespec* ts, int base)
 {
     FILETIME ft;
     LONGLONG current100Nanoseconds;
@@ -342,9 +344,9 @@ static int uuid_timespec_get(struct timespec* ts, int base)
 #else
 #include <sys/time.h>   /* For timeval. */
 
-struct timespec uuid_timespec_from_timeval(struct timeval* tv)
+struct uuid_timespec uuid_timespec_from_timeval(struct timeval* tv)
 {
-    struct timespec ts;
+    struct uuid_timespec ts;
 
     ts.tv_sec  = tv->tv_sec;
     ts.tv_nsec = tv->tv_usec * 1000;
@@ -352,8 +354,10 @@ struct timespec uuid_timespec_from_timeval(struct timeval* tv)
     return ts;
 }
 
-static int uuid_timespec_get(struct timespec* ts, int base)
+static int uuid_timespec_get(struct uuid_timespec* ts, int base)
 {
+    UUID_ZERO_OBJECT(ts);
+
     /*
     This is annoying to get working on all compilers. Here's the hierarchy:
 
@@ -363,7 +367,18 @@ static int uuid_timespec_get(struct timespec* ts, int base)
     */
     #if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__APPLE__)
     {
-        return timespec_get(ts, base);
+        int result;
+        struct timespec _ts;
+
+        result = timespec_get(&_ts, base);
+        if (result == 0) {
+            return result;  /* Failed to get the time. */
+        }
+
+        ts->tv_sec  = _ts->tv_sec;
+        ts->tv_nsec = _ts->tv_nsec;
+
+        return result;
     }
     #else
     {
@@ -373,9 +388,14 @@ static int uuid_timespec_get(struct timespec* ts, int base)
 
         #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
         {
-            if (clock_gettime(CLOCK_REALTIME, ts) != 0) {
+            struct timespec _ts;
+
+            if (clock_gettime(CLOCK_REALTIME, &_ts) != 0) {
                 return 0;   /* Failed to retrieve the time. 0 = error. */
             }
+
+            ts->tv_sec  = _ts->tv_sec;
+            ts->tv_nsec = _ts->tv_nsec;
 
             /* Getting here means we were successful. On success, need to return base (strange...) */
             return base;
@@ -398,7 +418,7 @@ static int uuid_timespec_get(struct timespec* ts, int base)
 
 static uuid_result uuid_get_time(uuid_uint64* pTime)
 {
-    struct timespec ts;
+    struct uuid_timespec ts;
 
     if (pTime == NULL) {
         return UUID_INVALID_ARGS;
