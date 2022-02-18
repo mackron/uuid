@@ -375,8 +375,8 @@ static int uuid_timespec_get(struct uuid_timespec* ts, int base)
             return result;  /* Failed to get the time. */
         }
 
-        ts->tv_sec  = _ts->tv_sec;
-        ts->tv_nsec = _ts->tv_nsec;
+        ts->tv_sec  = _ts.tv_sec;
+        ts->tv_nsec = _ts.tv_nsec;
 
         return result;
     }
@@ -394,8 +394,8 @@ static int uuid_timespec_get(struct uuid_timespec* ts, int base)
                 return 0;   /* Failed to retrieve the time. 0 = error. */
             }
 
-            ts->tv_sec  = _ts->tv_sec;
-            ts->tv_nsec = _ts->tv_nsec;
+            ts->tv_sec  = _ts.tv_sec;
+            ts->tv_nsec = _ts.tv_nsec;
 
             /* Getting here means we were successful. On success, need to return base (strange...) */
             return base;
