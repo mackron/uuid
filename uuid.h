@@ -486,7 +486,7 @@ static uuid_result uuid1_internal(unsigned char* pUUID, uuid_rand* pRNG)
 static uuid_result uuid3_internal(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName)
 {
 #if defined(UUID_MD5_CTX_TYPE)
-    unsigned char hash[20];
+    unsigned char hash[16];
     UUID_MD5_CTX_TYPE ctx;
 
     UUID_MD5_INIT(&ctx);
