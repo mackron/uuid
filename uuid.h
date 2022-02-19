@@ -122,6 +122,10 @@ extern "C" {
 
 #include <stddef.h>
 
+#if !defined(UUID_API)
+    #define UUID_API
+#endif
+
 #define UUID_SIZE           16
 #define UUID_SIZE_FORMATTED 37
 
@@ -140,18 +144,18 @@ typedef struct
     uuid_result (* onGenerate)(uuid_rand* pRNG, void* pBufferOut, size_t byteCount);
 } uuid_rand_callbacks;
 
-uuid_result uuid_rand_generate(uuid_rand* pRNG, void* pBufferOut, size_t byteCount);
+UUID_API uuid_result uuid_rand_generate(uuid_rand* pRNG, void* pBufferOut, size_t byteCount);
 
 
 /* Generation. */
-uuid_result uuid1(unsigned char* pUUID, uuid_rand* pRNG);
-uuid_result uuid3(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName);
-uuid_result uuid4(unsigned char* pUUID, uuid_rand* pRNG);
-uuid_result uuid5(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName);
-uuid_result uuid_ordered(unsigned char* pUUID, uuid_rand* pRNG);
+UUID_API uuid_result uuid1(unsigned char* pUUID, uuid_rand* pRNG);
+UUID_API uuid_result uuid3(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName);
+UUID_API uuid_result uuid4(unsigned char* pUUID, uuid_rand* pRNG);
+UUID_API uuid_result uuid5(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName);
+UUID_API uuid_result uuid_ordered(unsigned char* pUUID, uuid_rand* pRNG);
 
 /* Formatting. */
-uuid_result uuid_format(char* dst, size_t dstCap, const unsigned char* pUUID);
+UUID_API uuid_result uuid_format(char* dst, size_t dstCap, const unsigned char* pUUID);
 
 #ifdef __cplusplus
 }
@@ -231,7 +235,7 @@ struct and convert between the standard version and our version, depending on th
 #endif
 
 
-uuid_result uuid_rand_generate(uuid_rand* pRNG, void* pBufferOut, size_t byteCount)
+UUID_API uuid_result uuid_rand_generate(uuid_rand* pRNG, void* pBufferOut, size_t byteCount)
 {
     uuid_rand_callbacks* pCallbacks = (uuid_rand_callbacks*)pRNG;
 
@@ -678,27 +682,27 @@ static uuid_result uuidn(unsigned char* pUUID, uuid_rand* pRNG, const unsigned c
 }
 
 
-uuid_result uuid1(unsigned char* pUUID, uuid_rand* pRNG)
+UUID_API uuid_result uuid1(unsigned char* pUUID, uuid_rand* pRNG)
 {
     return uuidn(pUUID, pRNG, NULL, NULL, UUID_VERSION_1);
 }
 
-uuid_result uuid3(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName)
+UUID_API uuid_result uuid3(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName)
 {
     return uuidn(pUUID, NULL, pNamespaceUUID, pName, UUID_VERSION_3);
 }
 
-uuid_result uuid4(unsigned char* pUUID, uuid_rand* pRNG)
+UUID_API uuid_result uuid4(unsigned char* pUUID, uuid_rand* pRNG)
 {
     return uuidn(pUUID, pRNG, NULL, NULL, UUID_VERSION_4);
 }
 
-uuid_result uuid5(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName)
+UUID_API uuid_result uuid5(unsigned char* pUUID, const unsigned char* pNamespaceUUID, const char* pName)
 {
     return uuidn(pUUID, NULL, pNamespaceUUID, pName, UUID_VERSION_5);
 }
 
-uuid_result uuid_ordered(unsigned char* pUUID, uuid_rand* pRNG)
+UUID_API uuid_result uuid_ordered(unsigned char* pUUID, uuid_rand* pRNG)
 {
     return uuidn(pUUID, pRNG, NULL, NULL, UUID_VERSION_ORDERED);
 }
@@ -713,7 +717,7 @@ static void uuid_format_byte(char* dst, unsigned char byte)
     dst[1] = hex[(byte & 0x0F)     ];
 }
 
-uuid_result uuid_format(char* dst, size_t dstCap, const unsigned char* pUUID)
+UUID_API uuid_result uuid_format(char* dst, size_t dstCap, const unsigned char* pUUID)
 {
     const char* format = "xxxx-xx-xx-xx-xxxxxx";
 
