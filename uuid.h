@@ -233,7 +233,7 @@ struct and convert between the standard version and our version, depending on th
 
 uuid_result uuid_rand_generate(uuid_rand* pRNG, void* pBufferOut, size_t byteCount)
 {
-    uuid_rand_callbacks* pCallbacks = (uuid_rand*)pRNG;
+    uuid_rand_callbacks* pCallbacks = (uuid_rand_callbacks*)pRNG;
 
     if (pBufferOut == NULL) {
         return UUID_INVALID_ARGS;
