@@ -570,7 +570,7 @@ static uuid_result uuid5_internal(unsigned char* pUUID, const unsigned char* pNa
 #endif
 }
 
-uuid_result uuid_ordered_internal(unsigned char* pUUID, uuid_rand* pRNG)
+static uuid_result uuid_ordered_internal(unsigned char* pUUID, uuid_rand* pRNG)
 {
     uuid_result result;
     uuid_uint64 time;
