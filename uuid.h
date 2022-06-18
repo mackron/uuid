@@ -348,7 +348,7 @@ static int uuid_timespec_get(struct uuid_timespec* ts, int base)
 #else
 #include <sys/time.h>   /* For timeval. */
 
-struct uuid_timespec uuid_timespec_from_timeval(struct timeval* tv)
+static struct uuid_timespec uuid_timespec_from_timeval(struct timeval* tv)
 {
     struct uuid_timespec ts;
 
